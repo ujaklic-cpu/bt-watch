@@ -69,6 +69,12 @@ Configure each probe with `AGGREGATOR_URL=http://<hub>:8000/ingest`.
 - Map at `http://<hub>:8000/` shows host positions and estimated device positions (weighted centroid of RSSI from hosts with coordinates).
 - `/events` streams live updates; `/snapshot` returns current state.
 
+## ESP32 probe (Arduino)
+- Sketch: `firmware/esp32/bt_watch_esp32.ino`
+- Requirements: Arduino core for ESP32.
+- Configure WiFi, `AGGREGATOR_URL`, `HOST_ID`, `HOST_LOCATION`, optional `HOST_X/HOST_Y` and target MACs in the sketch header.
+- ESP32 scans BLE adverts and POSTs to `/ingest`; also registers host coordinates to `/host_coord`.
+
 ## Contributing
 See `CONTRIBUTING.md`. Please follow the Code of Conduct in `CODE_OF_CONDUCT.md`.
 
