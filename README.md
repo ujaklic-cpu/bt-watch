@@ -1,22 +1,31 @@
-# Bluetooth Watcher
+# bt-watch
 
-Small always-on Bluetooth LE watcher for Linux. It scans continuously with Bleak/BlueZ and serves a live feed + browser notifications on `http://localhost:5000`. Optionally filter to specific MAC addresses via `TARGET_MACS`.
+Always-on Bluetooth LE watcher for Linux. It scans continuously via Bleak/BlueZ and serves a live feed plus browser notifications on `http://localhost:5000`. Filter by MACs with `TARGET_MACS` or watch everything.
 
-## Run natively
+![CI](https://github.com/ujaklic-cpu/bt-watch/actions/workflows/ci.yml/badge.svg)
+
+## Features
+- Continuous BLE discovery (passive) with RSSI.
+- Server-Sent Events feed at `/events` for integrations.
+- Minimal web UI with native browser notifications.
+- Docker image that reuses the host `bluetoothd`.
+
+## Quick start (native)
 ```bash
 python3 -m pip install -r requirements.txt
 # optional one-time caps so you don't need sudo:
 sudo setcap 'cap_net_raw,cap_net_admin+eip' $(readlink -f $(which python3))
+# run (filter to one or more MACs, comma-separated):
 TARGET_MACS=40:71:E6:AD:2C:27 python3 bt_watch.py
-# then open http://localhost:5000
+# open http://localhost:5000
 ```
 
-## Build the container
+## Docker
+Build:
 ```bash
 docker build -t bt-watch .
 ```
-
-## Run the container (uses host BlueZ)
+Run (host BlueZ):
 ```bash
 docker run --rm -it \
   --net=host \
@@ -26,13 +35,23 @@ docker run --rm -it \
   bt-watch
 # visit http://localhost:5000 on the host
 ```
-
 Notes:
 - `--net=host` and the DBus mount let the container talk to the host's `bluetoothd`.
-- If `--privileged` is too broad, use the capability + device flags shown in the comment.
-- Keep the adapter up and Bluetooth enabled on the host; the container doesn't start `bluetoothd`, it reuses the host one.
+- If `--privileged` is too broad, use the capability + device flags shown.
+- Keep the adapter up and Bluetooth enabled on the host; the container reuses the host daemon.
 
-## What it does
-- Listens for all BLE advertisements (or only `TARGET_MACS`).
-- Streams events over Server-Sent Events at `/events`.
-- Minimal UI at `/` with a scrolling log and native browser notifications.
+## Development
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m compileall .
+```
+- Lint locally (matches CI): `python -m pip install ruff && ruff check .`
+- Docker rebuild after changes: `docker build -t bt-watch .`
+
+## Contributing
+See `CONTRIBUTING.md`. Please follow the Code of Conduct in `CODE_OF_CONDUCT.md`.
+
+## License
+MIT — see `LICENSE`.
