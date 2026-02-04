@@ -20,6 +20,7 @@ from flask import Flask, Response, jsonify, request
 
 app = Flask(__name__)
 
+# Internal coordinate system (unitless X,Y). Hosts can be seeded via env or updated via /host_coord.
 HOST_COORDS = {}
 if os.getenv("HOST_COORDS_JSON"):
     try:
@@ -27,8 +28,8 @@ if os.getenv("HOST_COORDS_JSON"):
     except Exception:
         HOST_COORDS = {}
 
-USER_LAT = float(os.getenv("USER_LAT", "0") or 0)
-USER_LON = float(os.getenv("USER_LON", "0") or 0)
+USER_X = float(os.getenv("USER_X", "0") or 0)
+USER_Y = float(os.getenv("USER_Y", "0") or 0)
 
 subscribers: List = []
 devices: Dict[str, Dict[str, dict]] = defaultdict(dict)  # address -> host -> event
@@ -49,21 +50,21 @@ def weight_from_rssi(rssi: int) -> float:
 
 
 def estimate_position(entries: List[dict]) -> Tuple[float, float]:
-    """Weighted centroid from host coordinates and RSSI."""
+    """Weighted centroid from host coordinates and RSSI (internal x,y)."""
     total_w = 0.0
-    sum_lat = 0.0
-    sum_lon = 0.0
+    sum_x = 0.0
+    sum_y = 0.0
     for e in entries:
         coords = HOST_COORDS.get(e["host"])
         if not coords:
             continue
         w = weight_from_rssi(e.get("rssi", -90) or -90)
         total_w += w
-        sum_lat += coords[0] * w
-        sum_lon += coords[1] * w
+        sum_x += coords[0] * w
+        sum_y += coords[1] * w
     if total_w == 0:
         return None, None
-    return sum_lat / total_w, sum_lon / total_w
+    return sum_x / total_w, sum_y / total_w
 
 
 @app.post("/ingest")
@@ -109,15 +110,15 @@ def snapshot():
             {
                 "address": addr,
                 "name": entries[0].get("name", ""),
-                "estimate": {"lat": est_lat, "lon": est_lon},
+                "estimate": {"x": est_lat, "y": est_lon},
                 "hosts": entries,
             }
         )
     return jsonify(
         {
-            "hosts": [{"id": h, "lat": v[0], "lon": v[1]} for h, v in HOST_COORDS.items()],
+            "hosts": [{"id": h, "x": v[0], "y": v[1]} for h, v in HOST_COORDS.items()],
             "devices": out,
-            "user": {"lat": USER_LAT, "lon": USER_LON},
+            "user": {"x": USER_X, "y": USER_Y},
             "updated": time.time(),
         }
     )
@@ -130,58 +131,67 @@ def index():
 <html>
 <head>
   <meta charset="utf-8">
-  <title>bt-watch map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>html,body,#map{height:100%;margin:0;} .info{background:white;padding:6px;}</style>
+  <title>bt-watch grid</title>
+  <style>
+    html,body { height:100%; margin:0; font-family:monospace;}
+    #c { width:100%; height:100%; background:#0b1021;}
+    #legend { position:fixed; top:10px; left:10px; background:#fff; padding:6px; }
+  </style>
 </head>
 <body>
-  <div id="map"></div>
-  <script>
-  const map = L.map('map').setView([0,0], 2);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-  const hostMarkers = {};
-  const deviceMarkers = {};
+<canvas id="c"></canvas>
+<div id="legend">Hosts (blue), Devices (red)</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+function resize(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.onresize = resize; resize();
 
-  function weightFromRssi(rssi){ return 1/Math.max(1, Math.abs(rssi||-90)); }
+let data = {hosts:[], devices:[], user:null};
 
-  async function loadSnapshot(){
-    const res = await fetch('/snapshot');
-    const data = await res.json();
-    if(data.hosts.length){
-      const lat = data.hosts[0].lat, lon = data.hosts[0].lon;
-      map.setView([lat, lon], 13);
+function draw(){
+  ctx.clearRect(0,0,canvas.width, canvas.height);
+  // auto-scale to fit all points
+  const all = [];
+  data.hosts.forEach(h=>all.push([h.x,h.y]));
+  data.devices.forEach(d=>{ if(d.estimate&&d.estimate.x!=null) all.push([d.estimate.x,d.estimate.y]); });
+  if(all.length===0) return;
+  const xs = all.map(p=>p[0]), ys=all.map(p=>p[1]);
+  const minx=Math.min(...xs), maxx=Math.max(...xs), miny=Math.min(...ys), maxy=Math.max(...ys);
+  const pad=20;
+  const scaleX = (canvas.width-2*pad)/Math.max(1, maxx-minx);
+  const scaleY = (canvas.height-2*pad)/Math.max(1, maxy-miny);
+  const scale = Math.min(scaleX, scaleY);
+  const fx = v => pad + (v-minx)*scale;
+  const fy = v => canvas.height - (pad + (v-miny)*scale);
+
+  // hosts
+  ctx.fillStyle = '#4FC3F7';
+  data.hosts.forEach(h=>{
+    const x=fx(h.x), y=fy(h.y);
+    ctx.beginPath(); ctx.arc(x,y,6,0,Math.PI*2); ctx.fill();
+    ctx.fillText(h.id, x+8, y+4);
+  });
+  // devices
+  ctx.fillStyle = '#FF5252';
+  data.devices.forEach(d=>{
+    if(d.estimate && d.estimate.x!=null){
+      const x=fx(d.estimate.x), y=fy(d.estimate.y);
+      ctx.beginPath(); ctx.arc(x,y,8,0,Math.PI*2); ctx.fill();
+      ctx.fillText(d.address, x+10, y+4);
     }
-    data.hosts.forEach(h=>{
-      if(!hostMarkers[h.id]){
-        hostMarkers[h.id] = L.circleMarker([h.lat, h.lon], {radius:6,color:'blue'}).addTo(map).bindPopup(`Host ${h.id}`);
-      }
-    });
-    if(data.user && data.user.lat && data.user.lon){
-      L.marker([data.user.lat, data.user.lon]).addTo(map).bindPopup('You');
-    }
-    data.devices.forEach(d=>{
-      if(d.estimate && d.estimate.lat && d.estimate.lon){
-        const key = d.address;
-        const label = `${d.address} ${d.name||''}`;
-        if(!deviceMarkers[key]){
-          deviceMarkers[key] = L.circle([d.estimate.lat, d.estimate.lon], {radius:15, color:'red'}).addTo(map).bindPopup(label);
-        } else {
-          deviceMarkers[key].setLatLng([d.estimate.lat, d.estimate.lon]).bindPopup(label);
-        }
-      }
-    });
-  }
+  });
+}
 
-  loadSnapshot();
-
-  const es = new EventSource('/events');
-  es.onmessage = (e)=>{
-    const d = JSON.parse(e.data);
-    // Optionally update sidebar; for now, refresh snapshot on every event.
-    loadSnapshot();
-  };
-  </script>
+async function loadSnapshot(){
+  const res = await fetch('/snapshot');
+  data = await res.json();
+  draw();
+}
+loadSnapshot();
+const es = new EventSource('/events');
+es.onmessage = ()=>loadSnapshot();
+</script>
 </body>
 </html>
 """
@@ -189,3 +199,14 @@ def index():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, threaded=True)
+
+@app.post("/host_coord")
+def host_coord():
+    data = request.get_json(force=True, silent=True) or {}
+    host = data.get("host")
+    x = data.get("x")
+    y = data.get("y")
+    if host is None or x is None or y is None:
+        return {"error": "host,x,y required"}, 400
+    HOST_COORDS[host] = [float(x), float(y)]
+    return {"status": "ok"}

@@ -28,6 +28,8 @@ TARGETS = {
 
 HOST_ID = os.getenv("HOST_ID") or socket.gethostname()
 HOST_LOCATION = os.getenv("HOST_LOCATION", "")
+HOST_X = os.getenv("HOST_X")
+HOST_Y = os.getenv("HOST_Y")
 
 subscribers = []
 sub_lock = threading.Lock()
@@ -62,6 +64,21 @@ def post_worker():
 
 if AGGREGATOR_URL:
     threading.Thread(target=post_worker, daemon=True).start()
+    # Advertise host position if provided
+    if HOST_X is not None and HOST_Y is not None:
+        try:
+            requests.post(
+                f"{AGGREGATOR_URL.rstrip('/')}/host_coord",
+                json={
+                    "host": HOST_ID,
+                    "x": float(HOST_X),
+                    "y": float(HOST_Y),
+                    "location": HOST_LOCATION,
+                },
+                timeout=2,
+            )
+        except Exception:
+            pass
 
 
 def on_advert(device, adv_data) -> None:
