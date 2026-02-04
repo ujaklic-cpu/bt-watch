@@ -75,6 +75,11 @@ Configure each probe with `AGGREGATOR_URL=http://<hub>:8000/ingest`.
 - Configure WiFi, `AGGREGATOR_URL`, `HOST_ID`, `HOST_LOCATION`, optional `HOST_X/HOST_Y` and target MACs in the sketch header.
 - ESP32 scans BLE adverts and POSTs to `/ingest`; also registers host coordinates to `/host_coord`.
 
+## Secure remote access (no open ports) with Twingate
+- A Twingate connector recipe is provided in `twingate/` (Docker).
+- Steps: create connector in Twingate admin, copy tokens, fill `twingate/.env`, run `docker compose -f twingate/docker-compose.twingate.yml up -d`.
+- Then point probes at the internal DNS exposed by Twingate (e.g., `http://hub.internal:8000`); no public ports required.
+
 ## Contributing
 See `CONTRIBUTING.md`. Please follow the Code of Conduct in `CODE_OF_CONDUCT.md`.
 
