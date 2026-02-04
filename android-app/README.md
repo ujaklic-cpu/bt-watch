@@ -14,6 +14,7 @@ Min SDK 26, target SDK 34. Accept runtime permissions for Bluetooth scan/connect
 - HOST_ID / HOST_LOCATION: labels per probe
 - Target MACs (optional, comma-separated). Empty = send all.
 - Tap Save, then Start to begin scanning.
+- Cleartext HTTP is allowed (network_security_config) so local hubs without TLS work; prefer HTTPS if available.
 
 ## Play Store checklist
 - Package: `net.jaklic.btwatch`

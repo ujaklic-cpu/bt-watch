@@ -13,7 +13,9 @@
         android:allowBackup="true"
         android:label="BtWatch"
         android:supportsRtl="true"
-        android:theme="@style/Theme.BtWatch">
+        android:theme="@style/Theme.BtWatch"
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config">
 
         <activity
             android:name=".MainActivity"
