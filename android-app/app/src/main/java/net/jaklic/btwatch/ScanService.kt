@@ -24,7 +24,6 @@ class ScanService : Service() {
     private var hostLoc: String = ""
     private var targets: Set<String> = emptySet()
     private val queue = ConcurrentLinkedQueue<AdvertPayload>()
-    private var autoStart = false
 
     override fun onCreate() {
         super.onCreate()
@@ -45,7 +44,6 @@ class ScanService : Service() {
             .split(",")
             .mapNotNull { it.trim().ifEmpty { null } }
             .toSet()
-        autoStart = s.autoStart
         Logs.add("Loaded settings hub=${s.hubUrl} host=$hostId loc=$hostLoc targets=${targets.size}")
     }
 
