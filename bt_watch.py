@@ -3,15 +3,19 @@
 BLE watcher: continuously scans for nearby Bluetooth LE devices and streams
 events to a tiny localhost web UI (SSE). Optionally filters to specific MACs
 via TARGET_MACS env var (comma-separated). Designed for always-on Linux boxes.
+
+Multi-host: set HOST_ID and optional HOST_LOCATION to tag sightings so you can
+deploy multiple probes and correlate RSSI by host.
 """
 import asyncio
 import json
 import os
 import queue
+import socket
 import threading
 import time
 
-from flask import Flask, Response
+from flask import Flask, Response, jsonify
 from bleak import BleakScanner
 
 # Comma-separated list of MACs to alert on; empty = report everything.
@@ -20,6 +24,9 @@ TARGETS = {
     for mac in os.getenv("TARGET_MACS", "").split(",")
     if mac.strip()
 }
+
+HOST_ID = os.getenv("HOST_ID") or socket.gethostname()
+HOST_LOCATION = os.getenv("HOST_LOCATION", "")
 
 subscribers = []
 sub_lock = threading.Lock()
@@ -42,6 +49,8 @@ def on_advert(device, adv_data) -> None:
         return
 
     event = {
+        "host": HOST_ID,
+        "location": HOST_LOCATION,
         "address": device.address,
         "name": device.name or adv_data.local_name or "",
         "rssi": adv_data.rssi,
@@ -92,6 +101,20 @@ def sse():
     return Response(gen(), mimetype="text/event-stream")
 
 
+@app.get("/health")
+def health():
+    """Simple health probe with host metadata."""
+    return jsonify(
+        {
+            "status": "ok",
+            "host": HOST_ID,
+            "location": HOST_LOCATION,
+            "targets": sorted(TARGETS),
+            "time": time.time(),
+        }
+    )
+
+
 @app.get("/")
 def index():
     """Minimal UI showing live sightings and firing browser notifications."""
@@ -107,10 +130,14 @@ es.onmessage = (e) => {
   const d = JSON.parse(e.data);
   const row = document.createElement('div');
   row.textContent = new Date(d.ts*1000).toLocaleTimeString() +
-    ' | ' + d.address + ' | ' + (d.name || '') + ' | RSSI ' + d.rssi;
+    ' | host: ' + (d.host || '?') +
+    (d.location ? ' ('+d.location+')' : '') +
+    ' | ' + d.address +
+    ' | ' + (d.name || '') +
+    ' | RSSI ' + d.rssi;
   log.prepend(row);
   if (Notification.permission === 'granted') {
-    new Notification('BT seen', { body: `${d.address} ${d.name||''} RSSI ${d.rssi}` });
+    new Notification('BT seen', { body: `${d.address} ${d.name||''} RSSI ${d.rssi} @ ${d.host}` });
   }
 };
 if (Notification.permission === 'default') Notification.requestPermission();

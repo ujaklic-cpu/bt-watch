@@ -1,6 +1,6 @@
 # bt-watch
 
-Always-on Bluetooth LE watcher for Linux. It scans continuously via Bleak/BlueZ and serves a live feed plus browser notifications on `http://localhost:5000`. Filter by MACs with `TARGET_MACS` or watch everything.
+Always-on Bluetooth LE watcher for Linux. It scans continuously via Bleak/BlueZ and serves a live feed plus browser notifications on `http://localhost:5000`. Filter by MACs with `TARGET_MACS` or watch everything. Multi-host ready: tag each probe with `HOST_ID`/`HOST_LOCATION` to correlate RSSI across locations.
 
 ![CI](https://github.com/ujaklic-cpu/bt-watch/actions/workflows/ci.yml/badge.svg)
 
@@ -9,6 +9,7 @@ Always-on Bluetooth LE watcher for Linux. It scans continuously via Bleak/BlueZ 
 - Server-Sent Events feed at `/events` for integrations.
 - Minimal web UI with native browser notifications.
 - Docker image that reuses the host `bluetoothd`.
+- Multi-host metadata (`host`, `location`) included in every event.
 
 ## Quick start (native)
 ```bash
@@ -31,6 +32,8 @@ docker run --rm -it \
   --net=host \
   --privileged \  # or: --cap-add NET_ADMIN --cap-add NET_RAW --device /dev/bus/usb \
   -v /var/run/dbus:/var/run/dbus \
+  -e HOST_ID=kitchen-pi \
+  -e HOST_LOCATION="Kitchen north" \
   -e TARGET_MACS=40:71:E6:AD:2C:27 \
   bt-watch
 # visit http://localhost:5000 on the host
@@ -39,6 +42,7 @@ Notes:
 - `--net=host` and the DBus mount let the container talk to the host's `bluetoothd`.
 - If `--privileged` is too broad, use the capability + device flags shown.
 - Keep the adapter up and Bluetooth enabled on the host; the container reuses the host daemon.
+ - Set `HOST_ID`/`HOST_LOCATION` differently on each probe to narrow down location by comparing RSSI.
 
 ## Development
 ```bash
