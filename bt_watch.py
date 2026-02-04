@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""
+BLE watcher: continuously scans for nearby Bluetooth LE devices and streams
+events to a tiny localhost web UI (SSE). Optionally filters to specific MACs
+via TARGET_MACS env var (comma-separated). Designed for always-on Linux boxes.
+"""
+import asyncio
+import json
+import os
+import queue
+import threading
+import time
+
+from flask import Flask, Response
+from bleak import BleakScanner
+
+# Comma-separated list of MACs to alert on; empty = report everything.
+TARGETS = {
+    mac.strip().lower()
+    for mac in os.getenv("TARGET_MACS", "").split(",")
+    if mac.strip()
+}
+
+subscribers = []
+sub_lock = threading.Lock()
+app = Flask(__name__)
+
+
+def broadcast(event: dict) -> None:
+    """Push an event to all connected SSE clients; drop if their queue is full."""
+    with sub_lock:
+        for q in list(subscribers):
+            try:
+                q.put_nowait(event)
+            except queue.Full:
+                pass
+
+
+def on_advert(device, adv_data) -> None:
+    """Bleak callback for each advertisement."""
+    if TARGETS and device.address.lower() not in TARGETS:
+        return
+
+    event = {
+        "address": device.address,
+        "name": device.name or adv_data.local_name or "",
+        "rssi": adv_data.rssi,
+        "ts": time.time(),
+    }
+    broadcast(event)
+
+
+async def scan_forever() -> None:
+    """Start the scanner and keep it running; recover on errors."""
+    scanner = BleakScanner(detection_callback=on_advert, scanning_mode="passive")
+    while True:
+        try:
+            await scanner.start()
+            while True:
+                await asyncio.sleep(5)
+        except Exception as e:  # noqa: BLE001 - broad to keep loop alive
+            print("scanner error:", e)
+            await asyncio.sleep(3)
+        finally:
+            try:
+                await scanner.stop()
+            except Exception:
+                pass
+
+
+def start_scan_thread() -> None:
+    """Run the asyncio scanner in a daemon thread."""
+    threading.Thread(target=lambda: asyncio.run(scan_forever()), daemon=True).start()
+
+
+@app.get("/events")
+def sse():
+    """Server-Sent Events endpoint streaming JSON lines."""
+    q: queue.Queue = queue.Queue(maxsize=200)
+    with sub_lock:
+        subscribers.append(q)
+
+    def gen():
+        try:
+            while True:
+                ev = q.get()
+                yield f"data: {json.dumps(ev)}\n\n"
+        except GeneratorExit:
+            with sub_lock:
+                subscribers.remove(q)
+
+    return Response(gen(), mimetype="text/event-stream")
+
+
+@app.get("/")
+def index():
+    """Minimal UI showing live sightings and firing browser notifications."""
+    return """
+<!doctype html>
+<html><body style="font-family:monospace">
+<h3>Bluetooth watcher</h3>
+<div id="list"></div>
+<script>
+const log = document.getElementById('list');
+const es  = new EventSource('/events');
+es.onmessage = (e) => {
+  const d = JSON.parse(e.data);
+  const row = document.createElement('div');
+  row.textContent = new Date(d.ts*1000).toLocaleTimeString() +
+    ' | ' + d.address + ' | ' + (d.name || '') + ' | RSSI ' + d.rssi;
+  log.prepend(row);
+  if (Notification.permission === 'granted') {
+    new Notification('BT seen', { body: `${d.address} ${d.name||''} RSSI ${d.rssi}` });
+  }
+};
+if (Notification.permission === 'default') Notification.requestPermission();
+</script>
+</body></html>
+"""
+
+
+if __name__ == "__main__":
+    start_scan_thread()
+    app.run(host="0.0.0.0", port=5000, threaded=True)
