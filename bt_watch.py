@@ -11,6 +11,7 @@ import asyncio
 import json
 import os
 import queue
+import requests
 import socket
 import threading
 import time
@@ -43,6 +44,26 @@ def broadcast(event: dict) -> None:
                 pass
 
 
+# Optional upstream aggregator: POST events asynchronously to AGGREGATOR_URL.
+AGGREGATOR_URL = os.getenv("AGGREGATOR_URL")
+post_queue: "queue.Queue[dict]" = queue.Queue(maxsize=1000)
+
+
+def post_worker():
+    while True:
+        evt = post_queue.get()
+        if not AGGREGATOR_URL:
+            continue
+        try:
+            requests.post(AGGREGATOR_URL, json=evt, timeout=2)
+        except Exception:
+            pass
+
+
+if AGGREGATOR_URL:
+    threading.Thread(target=post_worker, daemon=True).start()
+
+
 def on_advert(device, adv_data) -> None:
     """Bleak callback for each advertisement."""
     if TARGETS and device.address.lower() not in TARGETS:
@@ -57,6 +78,11 @@ def on_advert(device, adv_data) -> None:
         "ts": time.time(),
     }
     broadcast(event)
+    if AGGREGATOR_URL:
+        try:
+            post_queue.put_nowait(event)
+        except queue.Full:
+            pass
 
 
 async def scan_forever() -> None:
