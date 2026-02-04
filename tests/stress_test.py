@@ -43,7 +43,7 @@ def check_snapshot(client, hosts, devices):
     assert set(seen.keys()) == set(devices)
     for d in seen.values():
         est = d["estimate"]
-        assert est["lat"] is not None and est["lon"] is not None
+        assert est["x"] is not None and est["y"] is not None
 
 
 def run_scenario(host_count):
