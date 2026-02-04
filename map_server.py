@@ -11,7 +11,6 @@ Configuration:
 - USER_LAT, USER_LON: optional user marker.
 """
 import json
-import math
 import os
 import time
 from collections import defaultdict
