@@ -24,6 +24,7 @@ class ScanService : Service() {
     private var hostLoc: String = ""
     private var targets: Set<String> = emptySet()
     private val queue = ConcurrentLinkedQueue<AdvertPayload>()
+    private var autoStart = false
 
     override fun onCreate() {
         super.onCreate()
@@ -44,6 +45,8 @@ class ScanService : Service() {
             .split(",")
             .mapNotNull { it.trim().ifEmpty { null } }
             .toSet()
+        autoStart = s.autoStart
+        Logs.add("Loaded settings hub=${s.hubUrl} host=$hostId loc=$hostLoc targets=${targets.size}")
     }
 
     private fun startScan() {
@@ -51,6 +54,7 @@ class ScanService : Service() {
         val scanner = bt.bluetoothLeScanner ?: return
         scanner.startScan(callback)
         update("Scanning")
+        Logs.add("Scan started")
     }
 
     private val callback = object : ScanCallback() {
@@ -66,6 +70,7 @@ class ScanService : Service() {
                 ts = System.currentTimeMillis() / 1000.0
             )
             queue.add(payload)
+            Logs.add("Seen $addr rssi=${result.rssi}")
         }
     }
 
@@ -77,6 +82,7 @@ class ScanService : Service() {
                     val item = queue.poll() ?: break
                     try {
                         apiLocal.send(item)
+                        Logs.add("Sent ${item.address} rssi=${item.rssi}")
                     } catch (_: Exception) { /* ignore */ }
                 }
             }

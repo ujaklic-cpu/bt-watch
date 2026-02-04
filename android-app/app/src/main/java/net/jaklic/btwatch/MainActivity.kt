@@ -7,14 +7,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.unit.dp
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import net.jaklic.btwatch.ui.LogScreen
+import net.jaklic.btwatch.ui.SettingsScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -35,41 +35,26 @@ class MainActivity : ComponentActivity() {
         )
 
         setContent {
-            val settings by vm.state.collectAsState()
-            var hub by remember { mutableStateOf(TextFieldValue(settings.hubUrl)) }
-            var hostId by remember { mutableStateOf(TextFieldValue(settings.hostId)) }
-            var hostLoc by remember { mutableStateOf(TextFieldValue(settings.hostLocation)) }
-            var targets by remember { mutableStateOf(TextFieldValue(settings.targets)) }
-            var running by remember { mutableStateOf(false) }
+            val settings by vm.state.collectAsState(initial = Settings())
+            val nav = rememberNavController()
 
             MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(hub, { hub = it }, label = { Text("Hub URL") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(hostId, { hostId = it }, label = { Text("HOST_ID") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(hostLoc, { hostLoc = it }, label = { Text("HOST_LOCATION") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(targets, { targets = it }, label = { Text("Target MACs (comma)") }, modifier = Modifier.fillMaxWidth())
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Button(onClick = {
-                                lifecycleScope.launch {
-                                    vm.save(
-                                        hub.text.trim(),
-                                        hostId.text.trim(),
-                                        hostLoc.text.trim(),
-                                        targets.text.trim()
-                                    )
-                                }
-                            }) { Text("Save") }
-                            Button(onClick = {
+                NavHost(navController = nav, startDestination = "settings") {
+                    composable("settings") {
+                        SettingsScreen(
+                            settings = settings,
+                            onSave = { hub, host, loc, targets, autostart ->
+                                lifecycleScope.launch { vm.save(hub, host, loc, targets, autostart) }
+                            },
+                            onStart = {
                                 startService(Intent(this@MainActivity, ScanService::class.java))
-                                running = true
-                            }) { Text("Start") }
-                            OutlinedButton(onClick = {
-                                stopService(Intent(this@MainActivity, ScanService::class.java))
-                                running = false
-                            }) { Text("Stop") }
-                        }
-                        Text(text = "Status: ${if (running) "Running" else "Stopped"}")
+                            },
+                            onStop = { stopService(Intent(this@MainActivity, ScanService::class.java)) },
+                            onShowLog = { nav.navigate("log") }
+                        )
+                    }
+                    composable("log") {
+                        LogScreen(onBack = { nav.popBackStack() })
                     }
                 }
             }
