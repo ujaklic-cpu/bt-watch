@@ -20,6 +20,31 @@ HOST_COORDS_JSON='{"host1":[0,0],"host2":[5,2]}' USER_X=1 USER_Y=1 python3 map_s
 ```
 Expose/advertise the hub address the probes will use (e.g., `http://hub:8000`).
 
+### Hub on Windows
+- Install Python 3.12 from python.org, check “Add to PATH”.
+- Open PowerShell:
+  ```powershell
+  python -m venv .venv
+  .\.venv\Scripts\Activate.ps1
+  python -m pip install -r requirements.txt
+  set HOST_COORDS_JSON={"host1":[0,0],"host2":[5,2]}
+  set USER_X=1
+  set USER_Y=1
+  python map_server.py
+  ```
+- If you use Docker Desktop on Windows: `docker run --rm -p 8000:8000 -e HOST_COORDS_JSON='{"host1":[0,0]}' bt-watch python map_server.py`
+
+### Hub on ChromeOS (Crostini/Linux VM)
+- Enable Linux (Crostini), update packages: `sudo apt-get update && sudo apt-get install -y python3-venv python3-pip`
+- Inside the Linux container:
+  ```bash
+  python3 -m venv .venv
+  source .venv/bin/activate
+  pip install -r requirements.txt
+  HOST_COORDS_JSON='{"crostini-host":[0,0]}' USER_X=0 USER_Y=0 python3 map_server.py
+  ```
+- To reach from Android side of the Chromebook, use `http://penguin.linux.test:8000` (Crostini hostname) or `http://100.115.92.2:8000` (virtio-vsock bridge). Keep the container running and avoid sleeping the Chromebook.
+
 ## Linux probe
 Env vars:
 - `HOST_ID` (default hostname)
@@ -32,6 +57,22 @@ Run:
 AGGREGATOR_URL=http://hub:8000/ingest HOST_ID=host1 HOST_X=0 HOST_Y=0 \
 python3 bt_watch.py
 ```
+
+### Windows probe
+- Same venv steps as hub; then:
+  ```powershell
+  .\.venv\Scripts\Activate.ps1
+  set AGGREGATOR_URL=http://hub:8000/ingest
+  set HOST_ID=win-probe
+  set HOST_X=2
+  set HOST_Y=1
+  python bt_watch.py
+  ```
+
+### ChromeOS probe (Linux container)
+- In Crostini, install Bluetooth tools: `sudo apt-get install -y bluetooth bluez dbus`
+- Ensure the container has access to the Bluetooth adapter (requires ChromeOS flag and `--enable-bt-forwarding` on some devices; if blocked by policy, probes can’t scan).
+- Run same steps as Linux probe inside the container. If Bluetooth passthrough isn’t available, use an external USB BLE dongle passed to Crostini.
 
 ## Android probe (Chromebook-friendly)
 Path: `android-app/`
