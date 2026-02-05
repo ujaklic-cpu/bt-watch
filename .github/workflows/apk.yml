@@ -28,8 +28,13 @@ jobs:
             build-tools;34.0.0
             platform-tools
 
-      - name: Set up Gradle (cache)
-        uses: gradle/actions/setup-gradle@v3
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses
+
+      - name: Install Gradle
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gradle
 
       - name: Build debug APK
         working-directory: android-app
