@@ -20,6 +20,9 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Update SDK manager
+        run: yes | sdkmanager --update
+
       - name: Install Android SDK components
         uses: android-actions/setup-android@v3
         with:
