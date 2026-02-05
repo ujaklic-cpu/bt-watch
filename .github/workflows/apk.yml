@@ -20,12 +20,15 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Grant execute on gradlew
-        run: chmod +x android-app/gradlew
+      - name: Set up Gradle
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: 8.7
+          build-root-directory: android-app
 
       - name: Build debug APK
         working-directory: android-app
-        run: ./gradlew :app:assembleDebug
+        run: gradle :app:assembleDebug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
