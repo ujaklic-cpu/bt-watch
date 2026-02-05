@@ -20,11 +20,16 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Set up Gradle
-        uses: gradle/gradle-build-action@v3
+      - name: Install Android SDK components
+        uses: android-actions/setup-android@v3
         with:
-          gradle-version: 8.7
-          build-root-directory: android-app
+          packages: |
+            platforms;android-34
+            build-tools;34.0.0
+            platform-tools
+
+      - name: Set up Gradle (cache)
+        uses: gradle/actions/setup-gradle@v3
 
       - name: Build debug APK
         working-directory: android-app
