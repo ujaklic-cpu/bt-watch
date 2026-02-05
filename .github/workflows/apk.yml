@@ -28,9 +28,6 @@ jobs:
             build-tools;33.0.2
             platform-tools
 
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses
-
       - name: Install Gradle
         run: |
           sudo apt-get update
