@@ -23,19 +23,11 @@ jobs:
       - name: Install Android SDK components
         uses: android-actions/setup-android@v3
         with:
-          packages: |
-            platforms;android-33
-            build-tools;33.0.2
-            platform-tools
-
-      - name: Install Gradle
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gradle
+          packages: platforms;android-34 build-tools;34.0.0 platform-tools
 
       - name: Build debug APK
         working-directory: android-app
-        run: gradle :app:assembleDebug
+        run: ./gradlew :app:assembleDebug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
