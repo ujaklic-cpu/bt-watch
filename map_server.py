@@ -12,6 +12,8 @@ Configuration:
 """
 import json
 import os
+import queue
+import threading
 import time
 from collections import defaultdict
 from typing import Dict, List, Tuple
@@ -31,16 +33,18 @@ if os.getenv("HOST_COORDS_JSON"):
 USER_X = float(os.getenv("USER_X", "0") or 0)
 USER_Y = float(os.getenv("USER_Y", "0") or 0)
 
-subscribers: List = []
+subscribers: List["queue.Queue[dict]"] = []
 devices: Dict[str, Dict[str, dict]] = defaultdict(dict)  # address -> host -> event
+data_lock = threading.Lock()  # Protects subscribers and devices
 
 
 def broadcast(evt: dict):
-    for q in list(subscribers):
-        try:
-            q.put_nowait(evt)
-        except Exception:
-            pass
+    with data_lock:
+        for q in list(subscribers):
+            try:
+                q.put_nowait(evt)
+            except Exception:
+                pass
 
 
 def weight_from_rssi(rssi: int) -> float:
@@ -77,17 +81,17 @@ def ingest():
     address = data.get("address")
     now = time.time()
     data["ts"] = data.get("ts", now)
-    devices[address][host] = data
+    with data_lock:
+        devices[address][host] = data
     broadcast(data)
     return {"status": "ok"}
 
 
 @app.get("/events")
 def events():
-    import queue
-
     q: "queue.Queue[dict]" = queue.Queue(maxsize=500)
-    subscribers.append(q)
+    with data_lock:
+        subscribers.append(q)
 
     def gen():
         try:
@@ -95,25 +99,27 @@ def events():
                 ev = q.get()
                 yield f"data: {json.dumps(ev)}\n\n"
         except GeneratorExit:
-            subscribers.remove(q)
+            with data_lock:
+                subscribers.remove(q)
 
     return Response(gen(), mimetype="text/event-stream")
 
 
 @app.get("/snapshot")
 def snapshot():
-    out = []
-    for addr, host_map in devices.items():
-        entries = list(host_map.values())
-        est_lat, est_lon = estimate_position(entries)
-        out.append(
-            {
-                "address": addr,
-                "name": entries[0].get("name", ""),
-                "estimate": {"x": est_lat, "y": est_lon},
-                "hosts": entries,
-            }
-        )
+    with data_lock:
+        out = []
+        for addr, host_map in devices.items():
+            entries = list(host_map.values())
+            est_x, est_y = estimate_position(entries)
+            out.append(
+                {
+                    "address": addr,
+                    "name": entries[0].get("name", ""),
+                    "estimate": {"x": est_x, "y": est_y},
+                    "hosts": entries,
+                }
+            )
     return jsonify(
         {
             "hosts": [{"id": h, "x": v[0], "y": v[1]} for h, v in HOST_COORDS.items()],
@@ -197,9 +203,6 @@ es.onmessage = ()=>loadSnapshot();
 """
 
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, threaded=True)
-
 @app.post("/host_coord")
 def host_coord():
     data = request.get_json(force=True, silent=True) or {}
@@ -208,5 +211,17 @@ def host_coord():
     y = data.get("y")
     if host is None or x is None or y is None:
         return {"error": "host,x,y required"}, 400
-    HOST_COORDS[host] = [float(x), float(y)]
+    try:
+        x_float = float(x)
+        y_float = float(y)
+        # Validate coordinate ranges to prevent extreme values
+        if not (-1e6 <= x_float <= 1e6) or not (-1e6 <= y_float <= 1e6):
+            return {"error": "coordinates out of range"}, 400
+    except (ValueError, TypeError):
+        return {"error": "invalid coordinate values"}, 400
+    HOST_COORDS[host] = [x_float, y_float]
     return {"status": "ok"}
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000, threaded=True)
