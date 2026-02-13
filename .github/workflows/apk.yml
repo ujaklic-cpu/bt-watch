@@ -20,12 +20,6 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Configure DNS for dl.google.com
-        run: |
-          # Get IP address for maven.google.com and use it for dl.google.com
-          DL_GOOGLE_IP=$(dig +short maven.google.com | head -n1)
-          echo "$DL_GOOGLE_IP dl.google.com" | sudo tee -a /etc/hosts
-
       - name: Install Android SDK components
         uses: android-actions/setup-android@v3
         with:
