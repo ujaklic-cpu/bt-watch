@@ -73,7 +73,7 @@ class ScanService : Service() {
     }
 
     private suspend fun poster() {
-        while (isActive) {
+        while (scope.isActive) {
             val apiLocal = api
             if (apiLocal != null) {
                 while (true) {
