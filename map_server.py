@@ -56,6 +56,21 @@ def weight_from_rssi(rssi: int) -> float:
     return 1.0 / max(1.0, abs(rssi))
 
 
+def is_valid_coordinate(value) -> Tuple[bool, float]:
+    """Validate and convert coordinate value.
+    
+    Returns:
+        Tuple of (is_valid, float_value)
+    """
+    try:
+        float_val = float(value)
+        if -MAX_COORDINATE_VALUE <= float_val <= MAX_COORDINATE_VALUE:
+            return True, float_val
+        return False, 0.0
+    except (ValueError, TypeError):
+        return False, 0.0
+
+
 def estimate_position(entries: List[dict]) -> Tuple[float, float]:
     """Weighted centroid from host coordinates and RSSI (internal x,y)."""
     total_w = 0.0
@@ -214,14 +229,19 @@ def host_coord():
     y = data.get("y")
     if host is None or x is None or y is None:
         return {"error": "host,x,y required"}, 400
-    try:
-        x_float = float(x)
-        y_float = float(y)
-        # Validate coordinate ranges to prevent extreme values
-        if not (-MAX_COORDINATE_VALUE <= x_float <= MAX_COORDINATE_VALUE) or not (-MAX_COORDINATE_VALUE <= y_float <= MAX_COORDINATE_VALUE):
-            return {"error": "coordinates out of range"}, 400
-    except (ValueError, TypeError):
-        return {"error": "invalid coordinate values"}, 400
+    
+    # Validate coordinates
+    x_valid, x_float = is_valid_coordinate(x)
+    y_valid, y_float = is_valid_coordinate(y)
+    
+    if not x_valid or not y_valid:
+        if not x_valid and not y_valid:
+            return {"error": "invalid or out-of-range coordinate values"}, 400
+        elif not x_valid:
+            return {"error": "invalid or out-of-range x coordinate"}, 400
+        else:
+            return {"error": "invalid or out-of-range y coordinate"}, 400
+    
     HOST_COORDS[host] = [x_float, y_float]
     return {"status": "ok"}
 
