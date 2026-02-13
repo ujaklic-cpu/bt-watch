@@ -65,7 +65,7 @@ es.onmessage = (e) => {
   "status": "ok",
   "host": "kitchen-pi",
   "location": "Kitchen north",
-  "targets": ["40:71:e6:ad:2c:27"],
+  "targets": ["40:71:E6:AD:2C:27"],
   "time": 1707858000.123
 }
 ```

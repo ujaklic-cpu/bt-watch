@@ -22,6 +22,9 @@ from flask import Flask, Response, jsonify, request
 
 app = Flask(__name__)
 
+# Coordinate system configuration
+MAX_COORDINATE_VALUE = 1e6  # Maximum absolute value for x/y coordinates
+
 # Internal coordinate system (unitless X,Y). Hosts can be seeded via env or updated via /host_coord.
 HOST_COORDS = {}
 if os.getenv("HOST_COORDS_JSON"):
@@ -215,7 +218,7 @@ def host_coord():
         x_float = float(x)
         y_float = float(y)
         # Validate coordinate ranges to prevent extreme values
-        if not (-1e6 <= x_float <= 1e6) or not (-1e6 <= y_float <= 1e6):
+        if not (-MAX_COORDINATE_VALUE <= x_float <= MAX_COORDINATE_VALUE) or not (-MAX_COORDINATE_VALUE <= y_float <= MAX_COORDINATE_VALUE):
             return {"error": "coordinates out of range"}, 400
     except (ValueError, TypeError):
         return {"error": "invalid coordinate values"}, 400
