@@ -127,6 +127,13 @@ es.onmessage = (e) => {
 
 **Description:** Register or update host position coordinates.
 
+**Coordinate System:**
+- The system accepts arbitrary numeric coordinates (x, y) in the range -1e6 to 1e6
+- You can use geographic coordinates (latitude/longitude) or custom grid coordinates
+- For geographic coordinates: latitude typically ranges -90 to 90, longitude -180 to 180
+- For custom grids: use any consistent coordinate system (meters, feet, arbitrary units)
+- All hosts should use the same coordinate system for position estimation to work correctly
+
 **Request Body (JSON):**
 ```json
 {
@@ -139,8 +146,8 @@ es.onmessage = (e) => {
 
 **Required Fields:**
 - `host` (string): Host identifier
-- `x` (number): X coordinate (latitude or custom grid coordinate, -1e6 to 1e6)
-- `y` (number): Y coordinate (longitude or custom grid coordinate, -1e6 to 1e6)
+- `x` (number): X coordinate (latitude or custom grid X, range: -1e6 to 1e6)
+- `y` (number): Y coordinate (longitude or custom grid Y, range: -1e6 to 1e6)
 
 **Optional Fields:**
 - `location` (string): Human-readable location description
@@ -242,6 +249,7 @@ es.onmessage = (e) => {
 - Weights are calculated as `1 / max(1, |rssi|)` (stronger signals = more weight)
 - Only hosts with registered coordinates contribute to estimates
 - Returns `null` for x/y if no hosts with coordinates have seen the device
+- **Note:** All hosts must use the same coordinate system (all lat/lon or all custom grid) for meaningful position estimates
 
 ---
 
