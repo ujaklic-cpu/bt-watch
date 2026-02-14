@@ -12,7 +12,7 @@ Always-on Bluetooth LE watcher for Linux. It scans continuously via Bleak/BlueZ 
 - Minimal web UI with native browser notifications.
 - Docker image that reuses the host `bluetoothd`.
 - Multi-host metadata (`host`, `location`) included in every event.
-- Optional central map/aggregator: probes POST sightings to a hub that plots hosts and estimated device positions on a Leaflet map.
+- Optional central map/aggregator: probes POST sightings to a hub that plots hosts and estimated device positions on a canvas-based grid map.
 
 ## Quick start (native)
 ```bash

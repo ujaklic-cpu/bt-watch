@@ -131,11 +131,11 @@ es.onmessage = (e) => {
 - The system accepts arbitrary numeric coordinates (x, y) in the range -1e6 to 1e6
 - You can use geographic coordinates (latitude/longitude) or custom grid coordinates
 - **For geographic coordinates:**
-  - Recommended mapping: `x = longitude` (east-west), `y = latitude` (north-south)
-  - This follows standard geographic conventions where longitude is the x-axis and latitude is the y-axis
+  - Examples in this documentation use: `x = latitude` (north-south), `y = longitude` (east-west)
+  - This is a convention - you may also use x=longitude, y=latitude if preferred
   - Valid ranges: latitude -90 to 90, longitude -180 to 180
 - **For custom grids:** use any consistent coordinate system (meters, feet, arbitrary units)
-- All hosts should use the same coordinate system for position estimation to work correctly
+- **Important:** All hosts must use the same coordinate system for position estimation to work correctly
 
 **Request Body (JSON):**
 ```json
@@ -149,8 +149,8 @@ es.onmessage = (e) => {
 
 **Required Fields:**
 - `host` (string): Host identifier
-- `x` (number): X coordinate (longitude for geographic, or custom grid X, range: -1e6 to 1e6)
-- `y` (number): Y coordinate (latitude for geographic, or custom grid Y, range: -1e6 to 1e6)
+- `x` (number): X coordinate (range: -1e6 to 1e6)
+- `y` (number): Y coordinate (range: -1e6 to 1e6)
 
 **Optional Fields:**
 - `location` (string): Human-readable location description
