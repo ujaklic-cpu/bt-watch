@@ -1,0 +1,16 @@
+Changes made and committed locally:
+- Added fallback to active scanning when passive BLE init fails (BlueZ or_patterns requirement) in bt_watch.py.
+- Added /ingest/host_coord alias so probes posting to AGGREGATOR_URL ending with /ingest register coordinates successfully; restored __main__ block after the handler in map_server.py.
+
+Commit: Fix probe hub coord alias and passive scan fallback (hash 50e7f20).
+
+Push status: GitHub push blocked by DNS (github.com not resolvable). Nothing pushed upstream.
+
+To publish once network works:
+1) cd /home/urban
+2) git pull --rebase origin main
+3) git push origin main
+
+Running services remain:
+- Hub at http://192.168.50.151:8000 (pid from ps -ef | grep map_server.py).
+- Probe at http://192.168.50.151:5000 (pid via ps -ef | grep bt_watch.py).
