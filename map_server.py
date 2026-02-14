@@ -4,11 +4,11 @@ Central aggregator + map UI.
 - Receives events from probes via POST /ingest (set AGGREGATOR_URL on probes).
 - Stores latest sighting per (address, host).
 - Streams updates via SSE /events.
-- Serves a Leaflet map at / showing hosts and estimated device positions.
+- Serves a canvas-based grid map at / showing hosts and estimated device positions.
 
 Configuration:
-- HOST_COORDS_JSON: JSON mapping host_id -> [lat, lon] (required for positioning).
-- USER_LAT, USER_LON: optional user marker.
+- HOST_COORDS_JSON: JSON mapping host_id -> [x, y] (required for positioning).
+- USER_X, USER_Y: optional user marker coordinates.
 """
 import json
 import os

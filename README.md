@@ -63,13 +63,19 @@ python -m compileall .
 Run the hub on a machine reachable by all probes:
 ```bash
 HOST_COORDS_JSON='{"kitchen-pi":[46.051,14.506],"garage":[46.052,14.504]}' \
-USER_LAT=46.0515 USER_LON=14.5055 \
+USER_X=46.0515 USER_Y=14.5055 \
 python3 map_server.py
 # or docker: docker run --rm -it -p 8000:8000 -e HOST_COORDS_JSON='{"kitchen-pi":[...], ...}' bt-watch python map_server.py
 ```
 Configure each probe with `AGGREGATOR_URL=http://<hub>:8000/ingest`.
 - Map at `http://<hub>:8000/` shows host positions and estimated device positions (weighted centroid of RSSI from hosts with coordinates).
 - `/events` streams live updates; `/snapshot` returns current state.
+
+**Coordinate System:**
+- The system uses an arbitrary X/Y coordinate system (not limited to geographic coordinates)
+- You can use geographic coordinates (e.g., X=longitude, Y=latitude) or custom grid coordinates (e.g., meters, feet)
+- All hosts must use the same coordinate system for position estimation to work correctly
+- In the examples above, geographic coordinates are shown (latitude ~46°, longitude ~14.5°)
 
 ## ESP32 probe (Arduino)
 - Sketch: `firmware/esp32/bt_watch_esp32.ino`
