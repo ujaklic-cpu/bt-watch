@@ -132,8 +132,8 @@ es.onmessage = (e) => {
 - You can use geographic coordinates (latitude/longitude) or custom grid coordinates
 - **For geographic coordinates:**
   - The coordinate array format is `[x, y]` where the first value is x and the second is y
-  - Examples in this documentation use: first value (x) = latitude, second value (y) = longitude
-  - This is one convention - you may also use first=longitude, second=latitude if you prefer
+  - Examples in this documentation follow one common convention: first value (x) = latitude, second value (y) = longitude
+  - You may use a different mapping (e.g., first=longitude, second=latitude) if you prefer
   - Valid ranges: latitude -90 to 90, longitude -180 to 180
 - **For custom grids:** use any consistent coordinate system (meters, feet, arbitrary units)
 - **Important:** All hosts must use the same coordinate system for position estimation to work correctly
