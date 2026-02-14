@@ -160,11 +160,26 @@ def index():
     html,body { height:100%; margin:0; font-family:monospace;}
     #c { width:100%; height:100%; background:#0b1021;}
     #legend { position:fixed; top:10px; left:10px; background:#fff; padding:6px; }
+    #panel {
+      position:fixed; top:10px; right:10px; width:260px; max-height:90%;
+      background:#0b1021; color:#e0e0e0; border:1px solid #444; padding:10px;
+      overflow-y:auto; box-shadow:0 0 10px rgba(0,0,0,0.4);
+      font-size:13px;
+    }
+    #panel h3 { margin:6px 0 4px; font-size:13px; color:#9ad1ff; }
+    #panel ul { list-style:none; padding-left:0; margin:0 0 8px 0; }
+    #panel li { margin:2px 0; }
   </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="legend">Hosts (blue), Devices (red)</div>
+<div id="panel">
+  <h3>Hosts</h3>
+  <ul id="hostList"></ul>
+  <h3>Devices</h3>
+  <ul id="deviceList"></ul>
+</div>
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -207,10 +222,21 @@ function draw(){
   });
 }
 
+function renderLists(){
+  const hostList = document.getElementById('hostList');
+  const deviceList = document.getElementById('deviceList');
+  hostList.innerHTML = data.hosts.map(h => `<li><strong>${h.id}</strong> @ (${h.x}, ${h.y})</li>`).join('') || '<li>None</li>';
+  deviceList.innerHTML = data.devices.map(d => {
+    const est = d.estimate || {};
+    return `<li><strong>${d.address}</strong> rssi~${(d.hosts?.[0]?.rssi ?? '?')} pos(${est.x ?? '?'} , ${est.y ?? '?'})</li>`;
+  }).join('') || '<li>None</li>';
+}
+
 async function loadSnapshot(){
   const res = await fetch('/snapshot');
   data = await res.json();
   draw();
+  renderLists();
 }
 loadSnapshot();
 const es = new EventSource('/events');
