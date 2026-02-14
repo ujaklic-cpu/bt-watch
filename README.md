@@ -75,7 +75,8 @@ Configure each probe with `AGGREGATOR_URL=http://<hub>:8000/ingest`.
 - The system uses an arbitrary X/Y coordinate system (not limited to geographic coordinates)
 - You can use geographic coordinates or custom grid coordinates (e.g., meters, feet, arbitrary units)
 - All hosts must use the same coordinate system for position estimation to work correctly
-- In the examples above, the format is `[X, Y]` where X=46.051 (latitude), Y=14.506 (longitude)
+- Format is always `[X, Y]` where the first value is X and the second is Y
+- In the geographic coordinate examples above: first value (X) = 46.051 = latitude, second value (Y) = 14.506 = longitude
 
 ## ESP32 probe (Arduino)
 - Sketch: `firmware/esp32/bt_watch_esp32.ino`

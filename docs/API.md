@@ -131,8 +131,9 @@ es.onmessage = (e) => {
 - The system accepts arbitrary numeric coordinates (x, y) in the range -1e6 to 1e6
 - You can use geographic coordinates (latitude/longitude) or custom grid coordinates
 - **For geographic coordinates:**
-  - Examples in this documentation use: `x = latitude` (north-south), `y = longitude` (east-west)
-  - This is a convention - you may also use x=longitude, y=latitude if preferred
+  - The coordinate array format is `[x, y]` where the first value is x and the second is y
+  - Examples in this documentation use: first value (x) = latitude, second value (y) = longitude
+  - This is one convention - you may also use first=longitude, second=latitude if you prefer
   - Valid ranges: latitude -90 to 90, longitude -180 to 180
 - **For custom grids:** use any consistent coordinate system (meters, feet, arbitrary units)
 - **Important:** All hosts must use the same coordinate system for position estimation to work correctly
