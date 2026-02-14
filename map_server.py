@@ -246,5 +246,12 @@ def host_coord():
     return {"status": "ok"}
 
 
+# Alias for probes that append /host_coord to an AGGREGATOR_URL ending with /ingest
+# (e.g., AGGREGATOR_URL=http://hub:8000/ingest). This forwards to the same handler.
+@app.post("/ingest/host_coord")
+def host_coord_ingest_alias():
+    return host_coord()
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, threaded=True)
