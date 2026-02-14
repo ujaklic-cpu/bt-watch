@@ -4,7 +4,7 @@ Always-on Bluetooth LE watcher for Linux. It scans continuously via Bleak/BlueZ 
 
 ![CI](https://github.com/ujaklic-cpu/bt-watch/actions/workflows/ci.yml/badge.svg)
 
-> **📚 Documentation:** See [API Reference](docs/API.md) for complete endpoint documentation and [DEPLOYMENT.md](docs/DEPLOYMENT.md) for deployment guides.
+> **📚 Documentation:** See [API Reference](docs/API.md) for complete endpoint documentation, [DEPLOYMENT.md](docs/DEPLOYMENT.md) for deployment guides, and [TESTING.md](docs/TESTING.md) for step-by-step testing with Android devices.
 
 ## Features
 - Continuous BLE discovery (passive) with RSSI.
