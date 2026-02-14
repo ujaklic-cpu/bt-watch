@@ -104,6 +104,12 @@ def ingest():
     broadcast(data)
     return {"status": "ok"}
 
+# Compatibility: if a client sets base URL to /ingest and appends "ingest" again
+# (e.g., Android app base=http://host:8000/ingest), accept /ingest/ingest too.
+@app.post("/ingest/ingest")
+def ingest_double():
+    return ingest()
+
 
 @app.get("/events")
 def events():
