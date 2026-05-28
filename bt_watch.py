@@ -104,9 +104,18 @@ def on_advert(device, adv_data) -> None:
 
 async def scan_forever() -> None:
     """Start the scanner and keep it running; recover on errors."""
-    scanner = BleakScanner(detection_callback=on_advert, scanning_mode="passive")
     while True:
         try:
+            try:
+                scanner = BleakScanner(
+                    detection_callback=on_advert, scanning_mode="passive"
+                )
+            except Exception as e:
+                # Some BlueZ builds need or_patterns for passive; fall back to active.
+                print("scanner init error (passive); falling back to active:", e)
+                scanner = BleakScanner(
+                    detection_callback=on_advert, scanning_mode="active"
+                )
             await scanner.start()
             while True:
                 await asyncio.sleep(5)

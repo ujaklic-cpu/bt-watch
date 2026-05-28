@@ -4,14 +4,16 @@ Central aggregator + map UI.
 - Receives events from probes via POST /ingest (set AGGREGATOR_URL on probes).
 - Stores latest sighting per (address, host).
 - Streams updates via SSE /events.
-- Serves a Leaflet map at / showing hosts and estimated device positions.
+- Serves a canvas-based grid map at / showing hosts and estimated device positions.
 
 Configuration:
-- HOST_COORDS_JSON: JSON mapping host_id -> [lat, lon] (required for positioning).
-- USER_LAT, USER_LON: optional user marker.
+- HOST_COORDS_JSON: JSON mapping host_id -> [x, y] (required for positioning).
+- USER_X, USER_Y: optional user marker coordinates.
 """
 import json
 import os
+import queue
+import threading
 import time
 from collections import defaultdict
 from typing import Dict, List, Tuple
@@ -19,6 +21,9 @@ from typing import Dict, List, Tuple
 from flask import Flask, Response, jsonify, request
 
 app = Flask(__name__)
+
+# Coordinate system configuration
+MAX_COORDINATE_VALUE = 1e6  # Maximum absolute value for x/y coordinates
 
 # Internal coordinate system (unitless X,Y). Hosts can be seeded via env or updated via /host_coord.
 HOST_COORDS = {}
@@ -31,22 +36,39 @@ if os.getenv("HOST_COORDS_JSON"):
 USER_X = float(os.getenv("USER_X", "0") or 0)
 USER_Y = float(os.getenv("USER_Y", "0") or 0)
 
-subscribers: List = []
+subscribers: List["queue.Queue[dict]"] = []
 devices: Dict[str, Dict[str, dict]] = defaultdict(dict)  # address -> host -> event
+data_lock = threading.Lock()  # Protects subscribers and devices
 
 
 def broadcast(evt: dict):
-    for q in list(subscribers):
-        try:
-            q.put_nowait(evt)
-        except Exception:
-            pass
+    with data_lock:
+        for q in list(subscribers):
+            try:
+                q.put_nowait(evt)
+            except Exception:
+                pass
 
 
 def weight_from_rssi(rssi: int) -> float:
     # Convert RSSI to a positive weight; stronger signals contribute more.
     # Avoid zero/negative weights.
     return 1.0 / max(1.0, abs(rssi))
+
+
+def is_valid_coordinate(value) -> Tuple[bool, float]:
+    """Validate and convert coordinate value.
+    
+    Returns:
+        Tuple of (is_valid, float_value)
+    """
+    try:
+        float_val = float(value)
+        if -MAX_COORDINATE_VALUE <= float_val <= MAX_COORDINATE_VALUE:
+            return True, float_val
+        return False, 0.0
+    except (ValueError, TypeError):
+        return False, 0.0
 
 
 def estimate_position(entries: List[dict]) -> Tuple[float, float]:
@@ -77,17 +99,23 @@ def ingest():
     address = data.get("address")
     now = time.time()
     data["ts"] = data.get("ts", now)
-    devices[address][host] = data
+    with data_lock:
+        devices[address][host] = data
     broadcast(data)
     return {"status": "ok"}
+
+# Compatibility: if a client sets base URL to /ingest and appends "ingest" again
+# (e.g., Android app base=http://host:8000/ingest), accept /ingest/ingest too.
+@app.post("/ingest/ingest")
+def ingest_double():
+    return ingest()
 
 
 @app.get("/events")
 def events():
-    import queue
-
     q: "queue.Queue[dict]" = queue.Queue(maxsize=500)
-    subscribers.append(q)
+    with data_lock:
+        subscribers.append(q)
 
     def gen():
         try:
@@ -95,25 +123,27 @@ def events():
                 ev = q.get()
                 yield f"data: {json.dumps(ev)}\n\n"
         except GeneratorExit:
-            subscribers.remove(q)
+            with data_lock:
+                subscribers.remove(q)
 
     return Response(gen(), mimetype="text/event-stream")
 
 
 @app.get("/snapshot")
 def snapshot():
-    out = []
-    for addr, host_map in devices.items():
-        entries = list(host_map.values())
-        est_lat, est_lon = estimate_position(entries)
-        out.append(
-            {
-                "address": addr,
-                "name": entries[0].get("name", ""),
-                "estimate": {"x": est_lat, "y": est_lon},
-                "hosts": entries,
-            }
-        )
+    with data_lock:
+        out = []
+        for addr, host_map in devices.items():
+            entries = list(host_map.values())
+            est_x, est_y = estimate_position(entries)
+            out.append(
+                {
+                    "address": addr,
+                    "name": entries[0].get("name", ""),
+                    "estimate": {"x": est_x, "y": est_y},
+                    "hosts": entries,
+                }
+            )
     return jsonify(
         {
             "hosts": [{"id": h, "x": v[0], "y": v[1]} for h, v in HOST_COORDS.items()],
@@ -136,11 +166,26 @@ def index():
     html,body { height:100%; margin:0; font-family:monospace;}
     #c { width:100%; height:100%; background:#0b1021;}
     #legend { position:fixed; top:10px; left:10px; background:#fff; padding:6px; }
+    #panel {
+      position:fixed; top:10px; right:10px; width:260px; max-height:90%;
+      background:#0b1021; color:#e0e0e0; border:1px solid #444; padding:10px;
+      overflow-y:auto; box-shadow:0 0 10px rgba(0,0,0,0.4);
+      font-size:13px;
+    }
+    #panel h3 { margin:6px 0 4px; font-size:13px; color:#9ad1ff; }
+    #panel ul { list-style:none; padding-left:0; margin:0 0 8px 0; }
+    #panel li { margin:2px 0; }
   </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="legend">Hosts (blue), Devices (red)</div>
+<div id="panel">
+  <h3>Hosts</h3>
+  <ul id="hostList"></ul>
+  <h3>Devices</h3>
+  <ul id="deviceList"></ul>
+</div>
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -183,10 +228,21 @@ function draw(){
   });
 }
 
+function renderLists(){
+  const hostList = document.getElementById('hostList');
+  const deviceList = document.getElementById('deviceList');
+  hostList.innerHTML = data.hosts.map(h => `<li><strong>${h.id}</strong> @ (${h.x}, ${h.y})</li>`).join('') || '<li>None</li>';
+  deviceList.innerHTML = data.devices.map(d => {
+    const est = d.estimate || {};
+    return `<li><strong>${d.address}</strong> rssi~${(d.hosts?.[0]?.rssi ?? '?')} pos(${est.x ?? '?'} , ${est.y ?? '?'})</li>`;
+  }).join('') || '<li>None</li>';
+}
+
 async function loadSnapshot(){
   const res = await fetch('/snapshot');
   data = await res.json();
   draw();
+  renderLists();
 }
 loadSnapshot();
 const es = new EventSource('/events');
@@ -197,9 +253,6 @@ es.onmessage = ()=>loadSnapshot();
 """
 
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, threaded=True)
-
 @app.post("/host_coord")
 def host_coord():
     data = request.get_json(force=True, silent=True) or {}
@@ -208,5 +261,29 @@ def host_coord():
     y = data.get("y")
     if host is None or x is None or y is None:
         return {"error": "host,x,y required"}, 400
-    HOST_COORDS[host] = [float(x), float(y)]
+    
+    # Validate coordinates
+    x_valid, x_float = is_valid_coordinate(x)
+    y_valid, y_float = is_valid_coordinate(y)
+    
+    if not x_valid or not y_valid:
+        if not x_valid and not y_valid:
+            return {"error": "invalid or out-of-range coordinate values"}, 400
+        elif not x_valid:
+            return {"error": "invalid or out-of-range x coordinate"}, 400
+        else:
+            return {"error": "invalid or out-of-range y coordinate"}, 400
+    
+    HOST_COORDS[host] = [x_float, y_float]
     return {"status": "ok"}
+
+
+# Alias for probes that append /host_coord to an AGGREGATOR_URL ending with /ingest
+# (e.g., AGGREGATOR_URL=http://hub:8000/ingest). This forwards to the same handler.
+@app.post("/ingest/host_coord")
+def host_coord_ingest_alias():
+    return host_coord()
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000, threaded=True)
