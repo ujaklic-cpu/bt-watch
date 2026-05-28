@@ -4,6 +4,8 @@ Always-on Bluetooth LE watcher for Linux. It scans continuously via Bleak/BlueZ 
 
 ![CI](https://github.com/ujaklic-cpu/bt-watch/actions/workflows/ci.yml/badge.svg)
 
+> **📚 Documentation:** See [API Reference](docs/API.md) for complete endpoint documentation and [DEPLOYMENT.md](docs/DEPLOYMENT.md) for deployment guides.
+
 ## Features
 - Continuous BLE discovery (passive) with RSSI.
 - Server-Sent Events feed at `/events` for integrations.
@@ -82,6 +84,17 @@ Configure each probe with `AGGREGATOR_URL=http://<hub>:8000/ingest`.
 
 ## Contributing
 See `CONTRIBUTING.md`. Please follow the Code of Conduct in `CODE_OF_CONDUCT.md`.
+
+## Security Considerations
+
+⚠️ **Important:** This application has no built-in authentication. All endpoints accept unauthenticated requests.
+
+**For production deployments:**
+- Deploy on trusted networks only (VPN, private LAN)
+- Use reverse proxy with authentication (nginx + basic auth, OAuth)
+- Enable HTTPS/TLS
+- Consider using Twingate or similar zero-trust solution (see `twingate/`)
+- See [API.md](docs/API.md#security-considerations) for detailed security recommendations
 
 ## License
 MIT — see `LICENSE`.
