@@ -1,0 +1,5 @@
+Hub URL:        http://192.168.50.151:8000
+HOST_ID:        android-probe
+HOST_LOCATION:  Android phone (set to your physical spot, e.g., "Living room")
+Target MACs:    (leave empty to scan all, or comma-list like 11:22:33:44:55:66)
+Auto-start:     enable if you want scanning on app launch
