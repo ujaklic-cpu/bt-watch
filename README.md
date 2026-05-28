@@ -4,7 +4,7 @@ Always-on Bluetooth LE watcher for Linux. It scans continuously via Bleak/BlueZ 
 
 ![CI](https://github.com/ujaklic-cpu/bt-watch/actions/workflows/ci.yml/badge.svg)
 
-> **📚 Documentation:** See [API Reference](docs/API.md) for complete endpoint documentation and [DEPLOYMENT.md](docs/DEPLOYMENT.md) for deployment guides.
+> **📚 Documentation:** See [API Reference](docs/API.md) for complete endpoint documentation, [DEPLOYMENT.md](docs/DEPLOYMENT.md) for deployment guides, and [TESTING.md](docs/TESTING.md) for step-by-step testing with Android devices.
 
 ## Features
 - Continuous BLE discovery (passive) with RSSI.
@@ -12,7 +12,7 @@ Always-on Bluetooth LE watcher for Linux. It scans continuously via Bleak/BlueZ 
 - Minimal web UI with native browser notifications.
 - Docker image that reuses the host `bluetoothd`.
 - Multi-host metadata (`host`, `location`) included in every event.
-- Optional central map/aggregator: probes POST sightings to a hub that plots hosts and estimated device positions on a Leaflet map.
+- Optional central map/aggregator: probes POST sightings to a hub that plots hosts and estimated device positions on a canvas-based grid map.
 
 ## Quick start (native)
 ```bash
@@ -63,13 +63,22 @@ python -m compileall .
 Run the hub on a machine reachable by all probes:
 ```bash
 HOST_COORDS_JSON='{"kitchen-pi":[46.051,14.506],"garage":[46.052,14.504]}' \
-USER_LAT=46.0515 USER_LON=14.5055 \
+USER_X=46.0515 USER_Y=14.5055 \
 python3 map_server.py
 # or docker: docker run --rm -it -p 8000:8000 -e HOST_COORDS_JSON='{"kitchen-pi":[...], ...}' bt-watch python map_server.py
 ```
 Configure each probe with `AGGREGATOR_URL=http://<hub>:8000/ingest`.
 - Map at `http://<hub>:8000/` shows host positions and estimated device positions (weighted centroid of RSSI from hosts with coordinates).
 - `/events` streams live updates; `/snapshot` returns current state.
+
+**Coordinate System:**
+- The system uses an arbitrary X/Y coordinate system (not limited to geographic coordinates)
+- You can use geographic coordinates or custom grid coordinates (e.g., meters, feet, arbitrary units)
+- All hosts must use the same coordinate system for position estimation to work correctly
+- Format is always `[X, Y]` where the first value is X and the second is Y
+- In the geographic coordinate examples above, we use: first value (X) = 46.051 = latitude, second value (Y) = 14.506 = longitude
+  - Note: This differs from standard GIS convention (which uses longitude=X, latitude=Y)
+  - You may use any mapping that works for your use case, as long as all hosts use the same convention
 
 ## ESP32 probe (Arduino)
 - Sketch: `firmware/esp32/bt_watch_esp32.ino`
