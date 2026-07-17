@@ -116,4 +116,4 @@ Steps:
 - Keep BLE devices awake during scanning to avoid missing adverts.
 - Spread hosts with known x/y to improve trilateration quality.
 - Use HTTPS for hub if exposed beyond local network.
-- Monitor hub `/health` (from bt_watch) and `/snapshot` for status; Android app has a log screen for quick probe diagnostics.
+- Monitor the Linux probe on `/health` and inspect aggregator state on `/snapshot`; the Android app log shows probe send failures.

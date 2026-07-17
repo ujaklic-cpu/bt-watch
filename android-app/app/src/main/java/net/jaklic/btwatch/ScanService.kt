@@ -4,7 +4,6 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
-import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
@@ -28,10 +27,18 @@ class ScanService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startForeground(1, buildNotification("Starting..."))
-        scope.launch { loadSettings() }
-        scope.launch { poster() }
-        startScan()
+        try {
+            startForeground(1, buildNotification("Starting..."))
+        } catch (error: SecurityException) {
+            Logs.add("Cannot start foreground scanner: ${error.message}")
+            stopSelf()
+            return
+        }
+        scope.launch {
+            loadSettings()
+            startScan()
+            poster()
+        }
     }
 
     private suspend fun loadSettings() {
@@ -48,11 +55,19 @@ class ScanService : Service() {
     }
 
     private fun startScan() {
-        val bt = (getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
-        val scanner = bt.bluetoothLeScanner ?: return
-        scanner.startScan(callback)
-        update("Scanning")
-        Logs.add("Scan started")
+        try {
+            val bt = (getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
+            val scanner = bt.bluetoothLeScanner ?: run {
+                Logs.add("Bluetooth scanner unavailable")
+                return
+            }
+            scanner.startScan(callback)
+            update("Scanning")
+            Logs.add("Scan started")
+        } catch (error: SecurityException) {
+            Logs.add("Cannot start scan without Bluetooth permission: ${error.message}")
+            update("Permission required")
+        }
     }
 
     private val callback = object : ScanCallback() {
@@ -81,7 +96,11 @@ class ScanService : Service() {
                     try {
                         apiLocal.send(item)
                         Logs.add("Sent ${item.address} rssi=${item.rssi}")
-                    } catch (_: Exception) { /* ignore */ }
+                    } catch (error: Exception) {
+                        queue.add(item)
+                        Logs.add("Send failed for ${item.address}: ${error.message}")
+                        break
+                    }
                 }
             }
             delay(1000)
@@ -112,8 +131,12 @@ class ScanService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         scope.cancel()
-        val bt = (getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
-        bt.bluetoothLeScanner?.stopScan(callback)
+        try {
+            val bt = (getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
+            bt.bluetoothLeScanner?.stopScan(callback)
+        } catch (error: SecurityException) {
+            Logs.add("Cannot stop scan without Bluetooth permission: ${error.message}")
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

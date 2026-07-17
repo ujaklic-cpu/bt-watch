@@ -1,17 +1,10 @@
-# Twingate connector to give remote devices secure access to the hub without opening inbound ports.
-# Fill twingate/.env with values from your Twingate admin console before running:
-#   TWINGATE_NETWORK, TWINGATE_ACCESS_TOKEN, TWINGATE_REFRESH_TOKEN.
-version: "3.8"
 services:
   twingate-connector:
     image: twingate/connector:1
     container_name: twingate-connector
     env_file:
       - .env
-    network_mode: host   # connector needs to reach local services directly
+    network_mode: host
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
-      - SYS_ADMIN
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock

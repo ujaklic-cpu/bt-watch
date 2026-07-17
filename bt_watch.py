@@ -7,8 +7,10 @@ via TARGET_MACS env var (comma-separated). Designed for always-on Linux boxes.
 Multi-host: set HOST_ID and optional HOST_LOCATION to tag sightings so you can
 deploy multiple probes and correlate RSSI by host.
 """
+
 import asyncio
 import json
+import logging
 import os
 import queue
 import requests
@@ -19,7 +21,8 @@ import time
 from flask import Flask, Response, jsonify
 from bleak import BleakScanner
 
-# Comma-separated list of MACs to alert on; empty = report everything.
+logger = logging.getLogger(__name__)
+
 TARGETS = {
     mac.strip().lower()
     for mac in os.getenv("TARGET_MACS", "").split(",")
@@ -46,7 +49,6 @@ def broadcast(event: dict) -> None:
                 pass
 
 
-# Optional upstream aggregator: POST events asynchronously to AGGREGATOR_URL.
 AGGREGATOR_URL = os.getenv("AGGREGATOR_URL")
 post_queue: "queue.Queue[dict]" = queue.Queue(maxsize=1000)
 
@@ -54,20 +56,20 @@ post_queue: "queue.Queue[dict]" = queue.Queue(maxsize=1000)
 def post_worker():
     while True:
         evt = post_queue.get()
-        if not AGGREGATOR_URL:
-            continue
         try:
-            requests.post(AGGREGATOR_URL, json=evt, timeout=2)
-        except Exception:
-            pass
+            response = requests.post(AGGREGATOR_URL, json=evt, timeout=2)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            logger.warning("failed to post BLE sighting: %s", exc)
+        finally:
+            post_queue.task_done()
 
 
 if AGGREGATOR_URL:
     threading.Thread(target=post_worker, daemon=True).start()
-    # Advertise host position if provided
     if HOST_X is not None and HOST_Y is not None:
         try:
-            requests.post(
+            response = requests.post(
                 f"{AGGREGATOR_URL.rstrip('/')}/host_coord",
                 json={
                     "host": HOST_ID,
@@ -77,8 +79,9 @@ if AGGREGATOR_URL:
                 },
                 timeout=2,
             )
-        except Exception:
-            pass
+            response.raise_for_status()
+        except (ValueError, requests.RequestException) as exc:
+            logger.warning("failed to register host coordinates: %s", exc)
 
 
 def on_advert(device, adv_data) -> None:
@@ -105,28 +108,31 @@ def on_advert(device, adv_data) -> None:
 async def scan_forever() -> None:
     """Start the scanner and keep it running; recover on errors."""
     while True:
+        scanner = None
         try:
             try:
                 scanner = BleakScanner(
                     detection_callback=on_advert, scanning_mode="passive"
                 )
-            except Exception as e:
-                # Some BlueZ builds need or_patterns for passive; fall back to active.
-                print("scanner init error (passive); falling back to active:", e)
+            except Exception as exc:
+                logger.warning(
+                    "passive scanner unavailable; using active scanning: %s", exc
+                )
                 scanner = BleakScanner(
                     detection_callback=on_advert, scanning_mode="active"
                 )
             await scanner.start()
             while True:
                 await asyncio.sleep(5)
-        except Exception as e:  # noqa: BLE001 - broad to keep loop alive
-            print("scanner error:", e)
+        except Exception as exc:  # noqa: BLE001 - scanner errors must not stop the watcher
+            logger.exception("scanner failed; retrying: %s", exc)
             await asyncio.sleep(3)
         finally:
-            try:
-                await scanner.stop()
-            except Exception:
-                pass
+            if scanner is not None:
+                try:
+                    await scanner.stop()
+                except Exception as exc:  # noqa: BLE001 - cleanup must not stop retries
+                    logger.warning("failed to stop scanner cleanly: %s", exc)
 
 
 def start_scan_thread() -> None:
@@ -148,7 +154,8 @@ def sse():
                 yield f"data: {json.dumps(ev)}\n\n"
         except GeneratorExit:
             with sub_lock:
-                subscribers.remove(q)
+                if q in subscribers:
+                    subscribers.remove(q)
 
     return Response(gen(), mimetype="text/event-stream")
 
@@ -199,5 +206,6 @@ if (Notification.permission === 'default') Notification.requestPermission();
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
     start_scan_thread()
     app.run(host="0.0.0.0", port=5000, threaded=True)

@@ -1,7 +1,7 @@
-import random
-import time
 import os
+import random
 import sys
+import time
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -13,7 +13,7 @@ def make_hosts(n):
     base_lat, base_lon = 46.050, 14.500
     step = 0.001
     return {
-        f"host-{i+1}": (base_lat + i * step, base_lon + (i % 3) * step)
+        f"host-{i + 1}": (base_lat + i * step, base_lon + (i % 3) * step)
         for i in range(n)
     }
 
@@ -50,8 +50,7 @@ def run_scenario(host_count):
     hosts = make_hosts(host_count)
     devices = [f"AA:BB:CC:DD:EE:{i:02X}" for i in range(3)]
     client = app.test_client()
-    # Seed host coords into map_server globals via env-style injection
-    # Since HOST_COORDS is read at import time, we rebuild the mapping here.
+    # Coordinates are loaded at import time in production; scenarios replace them explicitly.
     from map_server import HOST_COORDS
 
     HOST_COORDS.clear()

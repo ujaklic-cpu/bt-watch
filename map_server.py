@@ -10,68 +10,79 @@ Configuration:
 - HOST_COORDS_JSON: JSON mapping host_id -> [x, y] (required for positioning).
 - USER_X, USER_Y: optional user marker coordinates.
 """
+
 import json
+import math
 import os
 import queue
 import threading
 import time
 from collections import defaultdict
-from typing import Dict, List, Tuple
-
 from flask import Flask, Response, jsonify, request
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 64 * 1024
 
-# Coordinate system configuration
-MAX_COORDINATE_VALUE = 1e6  # Maximum absolute value for x/y coordinates
+MAX_COORDINATE_VALUE = 1e6
 
-# Internal coordinate system (unitless X,Y). Hosts can be seeded via env or updated via /host_coord.
-HOST_COORDS = {}
-if os.getenv("HOST_COORDS_JSON"):
-    try:
-        HOST_COORDS = json.loads(os.getenv("HOST_COORDS_JSON", "{}"))
-    except Exception:
-        HOST_COORDS = {}
+HOST_COORDS: dict[str, list[float]] = {}
 
 USER_X = float(os.getenv("USER_X", "0") or 0)
 USER_Y = float(os.getenv("USER_Y", "0") or 0)
 
-subscribers: List["queue.Queue[dict]"] = []
-devices: Dict[str, Dict[str, dict]] = defaultdict(dict)  # address -> host -> event
-data_lock = threading.Lock()  # Protects subscribers and devices
+subscribers: list["queue.Queue[dict]"] = []
+devices: dict[str, dict[str, dict]] = defaultdict(dict)
+data_lock = threading.Lock()
 
 
-def broadcast(evt: dict):
+def broadcast(evt: dict) -> None:
     with data_lock:
         for q in list(subscribers):
             try:
                 q.put_nowait(evt)
-            except Exception:
+            except queue.Full:
                 pass
 
 
 def weight_from_rssi(rssi: int) -> float:
-    # Convert RSSI to a positive weight; stronger signals contribute more.
-    # Avoid zero/negative weights.
     return 1.0 / max(1.0, abs(rssi))
 
 
-def is_valid_coordinate(value) -> Tuple[bool, float]:
-    """Validate and convert coordinate value.
-    
-    Returns:
-        Tuple of (is_valid, float_value)
-    """
+def is_valid_coordinate(value: object) -> tuple[bool, float]:
     try:
         float_val = float(value)
-        if -MAX_COORDINATE_VALUE <= float_val <= MAX_COORDINATE_VALUE:
+        if (
+            math.isfinite(float_val)
+            and -MAX_COORDINATE_VALUE <= float_val <= MAX_COORDINATE_VALUE
+        ):
             return True, float_val
         return False, 0.0
     except (ValueError, TypeError):
         return False, 0.0
 
 
-def estimate_position(entries: List[dict]) -> Tuple[float, float]:
+def _load_host_coordinates(raw: str) -> dict[str, list[float]]:
+    try:
+        parsed = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    coordinates: dict[str, list[float]] = {}
+    for host, value in parsed.items():
+        if not isinstance(host, str) or not isinstance(value, list) or len(value) != 2:
+            continue
+        x_valid, x = is_valid_coordinate(value[0])
+        y_valid, y = is_valid_coordinate(value[1])
+        if x_valid and y_valid:
+            coordinates[host] = [x, y]
+    return coordinates
+
+
+HOST_COORDS.update(_load_host_coordinates(os.getenv("HOST_COORDS_JSON", "{}")))
+
+
+def estimate_position(entries: list[dict]) -> tuple[float | None, float | None]:
     """Weighted centroid from host coordinates and RSSI (internal x,y)."""
     total_w = 0.0
     sum_x = 0.0
@@ -92,20 +103,41 @@ def estimate_position(entries: List[dict]) -> Tuple[float, float]:
 @app.post("/ingest")
 def ingest():
     data = request.get_json(force=True, silent=True) or {}
-    required = {"host", "address", "rssi"}
-    if not required.issubset(data):
-        return {"error": "missing fields"}, 400
+    if not isinstance(data, dict):
+        return {"error": "JSON object required"}, 400
     host = data.get("host")
     address = data.get("address")
+    rssi = data.get("rssi")
+    if not isinstance(host, str) or not host.strip() or len(host) > 128:
+        return {"error": "invalid host"}, 400
+    if not isinstance(address, str) or not address.strip() or len(address) > 255:
+        return {"error": "invalid address"}, 400
+    if (
+        isinstance(rssi, bool)
+        or not isinstance(rssi, (int, float))
+        or not math.isfinite(float(rssi))
+    ):
+        return {"error": "invalid rssi"}, 400
+    if not -200 <= float(rssi) <= 100:
+        return {"error": "rssi out of range"}, 400
+    if not {"host", "address", "rssi"}.issubset(data):
+        return {"error": "missing fields"}, 400
     now = time.time()
-    data["ts"] = data.get("ts", now)
+    timestamp = data.get("ts", now)
+    if (
+        isinstance(timestamp, bool)
+        or not isinstance(timestamp, (int, float))
+        or not math.isfinite(float(timestamp))
+    ):
+        return {"error": "invalid timestamp"}, 400
+    data["ts"] = float(timestamp)
     with data_lock:
         devices[address][host] = data
     broadcast(data)
     return {"status": "ok"}
 
-# Compatibility: if a client sets base URL to /ingest and appends "ingest" again
-# (e.g., Android app base=http://host:8000/ingest), accept /ingest/ingest too.
+
+# Android versions that store `/ingest` as the base URL append the endpoint a second time.
 @app.post("/ingest/ingest")
 def ingest_double():
     return ingest()
@@ -124,7 +156,8 @@ def events():
                 yield f"data: {json.dumps(ev)}\n\n"
         except GeneratorExit:
             with data_lock:
-                subscribers.remove(q)
+                if q in subscribers:
+                    subscribers.remove(q)
 
     return Response(gen(), mimetype="text/event-stream")
 
@@ -144,9 +177,13 @@ def snapshot():
                     "hosts": entries,
                 }
             )
+        hosts = [
+            {"id": host, "x": value[0], "y": value[1]}
+            for host, value in HOST_COORDS.items()
+        ]
     return jsonify(
         {
-            "hosts": [{"id": h, "x": v[0], "y": v[1]} for h, v in HOST_COORDS.items()],
+            "hosts": hosts,
             "devices": out,
             "user": {"x": USER_X, "y": USER_Y},
             "updated": time.time(),
@@ -231,11 +268,18 @@ function draw(){
 function renderLists(){
   const hostList = document.getElementById('hostList');
   const deviceList = document.getElementById('deviceList');
-  hostList.innerHTML = data.hosts.map(h => `<li><strong>${h.id}</strong> @ (${h.x}, ${h.y})</li>`).join('') || '<li>None</li>';
-  deviceList.innerHTML = data.devices.map(d => {
+  const listItem = text => {
+    const item = document.createElement('li');
+    item.textContent = text;
+    return item;
+  };
+  const hostItems = data.hosts.map(h => listItem(`${h.id} @ (${h.x}, ${h.y})`));
+  const deviceItems = data.devices.map(d => {
     const est = d.estimate || {};
-    return `<li><strong>${d.address}</strong> rssi~${(d.hosts?.[0]?.rssi ?? '?')} pos(${est.x ?? '?'} , ${est.y ?? '?'})</li>`;
-  }).join('') || '<li>None</li>';
+    return listItem(`${d.address} rssi~${d.hosts?.[0]?.rssi ?? '?'} pos(${est.x ?? '?'}, ${est.y ?? '?'})`);
+  });
+  hostList.replaceChildren(...(hostItems.length ? hostItems : [listItem('None')]));
+  deviceList.replaceChildren(...(deviceItems.length ? deviceItems : [listItem('None')]));
 }
 
 async function loadSnapshot(){
@@ -261,25 +305,24 @@ def host_coord():
     y = data.get("y")
     if host is None or x is None or y is None:
         return {"error": "host,x,y required"}, 400
-    
-    # Validate coordinates
+    if not isinstance(host, str) or not host.strip() or len(host) > 128:
+        return {"error": "invalid host"}, 400
     x_valid, x_float = is_valid_coordinate(x)
     y_valid, y_float = is_valid_coordinate(y)
-    
+
     if not x_valid or not y_valid:
         if not x_valid and not y_valid:
             return {"error": "invalid or out-of-range coordinate values"}, 400
-        elif not x_valid:
+        if not x_valid:
             return {"error": "invalid or out-of-range x coordinate"}, 400
-        else:
-            return {"error": "invalid or out-of-range y coordinate"}, 400
-    
-    HOST_COORDS[host] = [x_float, y_float]
+        return {"error": "invalid or out-of-range y coordinate"}, 400
+
+    with data_lock:
+        HOST_COORDS[host] = [x_float, y_float]
     return {"status": "ok"}
 
 
-# Alias for probes that append /host_coord to an AGGREGATOR_URL ending with /ingest
-# (e.g., AGGREGATOR_URL=http://hub:8000/ingest). This forwards to the same handler.
+# Compatibility alias for clients configured with an `/ingest` base URL.
 @app.post("/ingest/host_coord")
 def host_coord_ingest_alias():
     return host_coord()

@@ -4,7 +4,7 @@ Always-on Bluetooth LE watcher for Linux. It scans continuously via Bleak/BlueZ 
 
 ![CI](https://github.com/ujaklic-cpu/bt-watch/actions/workflows/ci.yml/badge.svg)
 
-> **📚 Documentation:** See [API Reference](docs/API.md) for complete endpoint documentation, [DEPLOYMENT.md](docs/DEPLOYMENT.md) for deployment guides, and [TESTING.md](docs/TESTING.md) for step-by-step testing with Android devices.
+See the [API reference](docs/API.md), [deployment guide](docs/DEPLOYMENT.md), and [manual system test](docs/TESTING.md).
 
 ## Features
 - Continuous BLE discovery (passive) with RSSI.
@@ -33,7 +33,8 @@ Run (host BlueZ):
 ```bash
 docker run --rm -it \
   --net=host \
-  --privileged \  # or: --cap-add NET_ADMIN --cap-add NET_RAW --device /dev/bus/usb \
+  --cap-add NET_ADMIN --cap-add NET_RAW \
+  --device /dev/bus/usb \
   -v /var/run/dbus:/var/run/dbus \
   -e HOST_ID=kitchen-pi \
   -e HOST_LOCATION="Kitchen north" \

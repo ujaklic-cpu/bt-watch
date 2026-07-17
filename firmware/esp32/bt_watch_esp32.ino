@@ -11,7 +11,7 @@
 #include <HTTPClient.h>
 #include <BLEDevice.h>
 
-// ----------- CONFIG -----------
+// Device configuration
 const char *WIFI_SSID = "YOUR_WIFI";
 const char *WIFI_PASS = "YOUR_PASS";
 
@@ -24,9 +24,25 @@ float HOST_Y = 0.0f;
 // Optional MAC allowlist; leave empty to send all.
 String TARGET_MACS[] = {}; // example: {"40:71:E6:AD:2C:27"}
 const int TARGET_MAC_COUNT = sizeof(TARGET_MACS) / sizeof(String);
-// ----------- END CONFIG -------
 
 HTTPClient http;
+
+String jsonEscape(const String &value) {
+  String escaped;
+  escaped.reserve(value.length());
+  for (size_t i = 0; i < value.length(); i++) {
+    char c = value.charAt(i);
+    if (c == '"' || c == '\\') escaped += '\\';
+    if (c == '\n') {
+      escaped += "\\n";
+    } else if (c == '\r') {
+      escaped += "\\r";
+    } else if (static_cast<unsigned char>(c) >= 0x20) {
+      escaped += c;
+    }
+  }
+  return escaped;
+}
 
 bool isAllowed(const String &mac) {
   if (TARGET_MAC_COUNT == 0) return true;
@@ -56,12 +72,11 @@ class ScanCallbacks : public BLEAdvertisedDeviceCallbacks {
     String name = adv.getName().c_str();
     if (name.length() == 0 && adv.haveName()) name = adv.getName().c_str();
 
-    // Build JSON
     String json = "{";
-    json += "\"host\":\"" + HOST_ID + "\",";
-    json += "\"location\":\"" + HOST_LOCATION + "\",";
-    json += "\"address\":\"" + mac + "\",";
-    json += "\"name\":\"" + name + "\",";
+    json += "\"host\":\"" + jsonEscape(HOST_ID) + "\",";
+    json += "\"location\":\"" + jsonEscape(HOST_LOCATION) + "\",";
+    json += "\"address\":\"" + jsonEscape(mac) + "\",";
+    json += "\"name\":\"" + jsonEscape(name) + "\",";
     json += "\"rssi\":" + String(rssi) + ",";
     json += "\"ts\":" + String((float)millis() / 1000.0f);
     json += "}";
@@ -72,10 +87,10 @@ class ScanCallbacks : public BLEAdvertisedDeviceCallbacks {
 
 void registerHostCoord() {
   String json = "{";
-  json += "\"host\":\"" + HOST_ID + "\",";
+  json += "\"host\":\"" + jsonEscape(HOST_ID) + "\",";
   json += "\"x\":" + String(HOST_X, 3) + ",";
   json += "\"y\":" + String(HOST_Y, 3) + ",";
-  json += "\"location\":\"" + HOST_LOCATION + "\"";
+  json += "\"location\":\"" + jsonEscape(HOST_LOCATION) + "\"";
   json += "}";
   postJSON("/host_coord", json);
 }
@@ -102,6 +117,5 @@ void setup() {
 }
 
 void loop() {
-  // BLE scan runs in background; keep WiFi alive.
   delay(1000);
 }
