@@ -10,7 +10,7 @@ This document covers end-to-end deployment of BtWatch components: hub (map_serve
 - **Secure access:** `twingate/` — Docker Compose to run a Twingate connector so probes can reach the hub without exposing ports.
 
 ## Hub setup (Python)
-Prereqs: Python 3.10+, pip, BlueZ libs on Linux.
+Prerequisites: Python 3.10+ and pip. The hub only receives HTTP requests and does not need Bluetooth hardware or BlueZ libraries.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -46,6 +46,8 @@ Expose/advertise the hub address the probes will use (e.g., `http://hub:8000`).
 - To reach from Android side of the Chromebook, use `http://penguin.linux.test:8000` (Crostini hostname) or `http://100.115.92.2:8000` (virtio-vsock bridge). Keep the container running and avoid sleeping the Chromebook.
 
 ## Linux probe
+The Linux probe requires a BlueZ-compatible adapter and permissions to scan Bluetooth advertisements. It serves an unauthenticated UI on port 5000, so restrict network access or place it behind an authenticated reverse proxy.
+
 Env vars:
 - `HOST_ID` (default hostname)
 - `HOST_LOCATION` (label)

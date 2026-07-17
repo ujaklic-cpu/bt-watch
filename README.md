@@ -15,6 +15,9 @@ See the [API reference](docs/API.md), [deployment guide](docs/DEPLOYMENT.md), an
 - Optional central map/aggregator: probes POST sightings to a hub that plots hosts and estimated device positions on a canvas-based grid map.
 
 ## Quick start (native)
+
+Use a Linux host with a BlueZ-compatible Bluetooth adapter. This process binds its unauthenticated web UI to all interfaces on port 5000; use a trusted network or a reverse proxy with authentication.
+
 ```bash
 python3 -m pip install -r requirements.txt
 # optional one-time caps so you don't need sudo:
@@ -66,7 +69,7 @@ Run the hub on a machine reachable by all probes:
 HOST_COORDS_JSON='{"kitchen-pi":[46.051,14.506],"garage":[46.052,14.504]}' \
 USER_X=46.0515 USER_Y=14.5055 \
 python3 map_server.py
-# or docker: docker run --rm -it -p 8000:8000 -e HOST_COORDS_JSON='{"kitchen-pi":[...], ...}' bt-watch python map_server.py
+# Docker: docker run --rm -it -p 8000:8000 -e HOST_COORDS_JSON='{"kitchen-pi":[...], ...}' bt-watch python map_server.py
 ```
 Configure each probe with `AGGREGATOR_URL=http://<hub>:8000/ingest`.
 - Map at `http://<hub>:8000/` shows host positions and estimated device positions (weighted centroid of RSSI from hosts with coordinates).
